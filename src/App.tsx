@@ -18,7 +18,7 @@ import DealDetailPage from "./pages/DealDetailPage.tsx";
 import TasksPage from "./pages/TasksPage.tsx";
 import ActivitiesPage from "./pages/ActivitiesPage.tsx";
 import ReportsPage from "./pages/ReportsPage.tsx";
-import AttributionReportPage from "./pages/AttributionReportPage.tsx";
+import ReportDetailPage from "./pages/ReportDetailPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -46,8 +46,7 @@ const App = () => (
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/activities" element={<ActivitiesPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/reports/attribution" element={<AttributionReportPage />} />
-            <Route path="/reports/:id" element={<ReportsPage />} />
+            <Route path="/reports/:reportId" element={<ReportDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

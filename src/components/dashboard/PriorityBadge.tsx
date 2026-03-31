@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
-import type { TaskPriority } from "@/data/mock-data";
+import type { Database } from "@/integrations/supabase/types";
+
+type TaskPriority = Database["public"]["Enums"]["task_priority"];
 
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
   low: { label: 'Low', className: 'bg-muted text-muted-foreground' },

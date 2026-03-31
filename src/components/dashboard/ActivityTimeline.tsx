@@ -1,6 +1,6 @@
+import { Link } from "react-router-dom";
 import { Phone, Mail, MessageCircle, Users, FileText, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Activity } from "@/data/mock-data";
 import { format, parseISO } from "date-fns";
 
 const activityIcons = {
@@ -21,8 +21,23 @@ const activityColors = {
   system: 'bg-info/10 text-info',
 };
 
+export type ActivityTimelineItem = {
+  id: string;
+  type: keyof typeof activityIcons;
+  title: string;
+  description?: string | null;
+  owner?: string;
+  actorLabel?: string;
+  timestamp?: string;
+  occurredAt?: string;
+  duration?: number | null;
+  durationMinutes?: number | null;
+  relatedLabel?: string | null;
+  relatedHref?: string | null;
+};
+
 interface ActivityTimelineProps {
-  activities: Activity[];
+  activities: ActivityTimelineItem[];
   className?: string;
 }
 
@@ -31,6 +46,10 @@ export function ActivityTimeline({ activities, className }: ActivityTimelineProp
     <div className={cn("space-y-0", className)}>
       {activities.map((activity, index) => {
         const Icon = activityIcons[activity.type];
+        const timestamp = activity.occurredAt ?? activity.timestamp;
+        const actorLabel = activity.actorLabel ?? activity.owner ?? "Unassigned";
+        const durationMinutes = activity.durationMinutes ?? activity.duration;
+
         return (
           <div key={activity.id} className="flex gap-3 pb-6 relative">
             {index < activities.length - 1 && (
@@ -43,15 +62,32 @@ export function ActivityTimeline({ activities, className }: ActivityTimelineProp
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium truncate">{activity.title}</p>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {format(parseISO(activity.timestamp), 'MMM d, h:mm a')}
+                  {timestamp ? format(parseISO(timestamp), 'MMM d, h:mm a') : "—"}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{activity.description}</p>
+              {activity.description ? (
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{activity.description}</p>
+              ) : null}
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-muted-foreground">{activity.owner}</span>
-                {activity.duration && (
-                  <span className="text-xs text-muted-foreground">• {activity.duration}min</span>
-                )}
+                <span className="text-xs text-muted-foreground">{actorLabel}</span>
+                {activity.relatedLabel ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    {activity.relatedHref ? (
+                      <Link
+                        to={activity.relatedHref}
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors truncate"
+                      >
+                        {activity.relatedLabel}
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted-foreground truncate">{activity.relatedLabel}</span>
+                    )}
+                  </>
+                ) : null}
+                {durationMinutes ? (
+                  <span className="text-xs text-muted-foreground">• {durationMinutes}min</span>
+                ) : null}
               </div>
             </div>
           </div>

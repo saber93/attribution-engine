@@ -1,319 +1,326 @@
+import { Link } from "react-router-dom";
+import { AlertTriangle, Handshake, Inbox, Target, TrendingUp, UserCheck, UserPlus } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionHeader } from "@/components/dashboard/SectionHeader";
 import { PlatformBadge } from "@/components/dashboard/PlatformBadge";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
-import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline";
 import { PriorityBadge } from "@/components/dashboard/PriorityBadge";
+import { EmptyState } from "@/components/dashboard/EmptyState";
+import { StateCard } from "@/components/dashboard/StateCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { kpiSummary, spendVsRevenueData, leadsQualifiedWonData, platformSpendData, pipelineStageData, funnelData, campaigns, leads, tasks, activities } from "@/data/mock-data";
-import { DollarSign, Eye, MousePointer, UserPlus, UserCheck, Handshake, TrendingUp, Target, ArrowRight, Lightbulb, AlertTriangle, Zap } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from "recharts";
-import { Link } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useOverviewQuery } from "@/features/overview/queries";
+import type { OverviewPageData } from "@/features/overview/types";
+import { getInitials } from "@/lib/display";
+import { formatCompactCount, formatCompactCurrency, formatDate } from "@/lib/formatters";
 
-function formatNumber(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toString();
+function getPipelineWidth(value: number, maxValue: number) {
+  if (value <= 0 || maxValue <= 0) return "0%";
+  return `${Math.max(12, (value / maxValue) * 100)}%`;
 }
 
-function formatCurrency(n: number): string {
-  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
-  return `$${n}`;
+function isOverviewEmpty(data: OverviewPageData) {
+  const hasPipelineData = data.pipelineByStage.some((item) => item.count > 0);
+  const hasBreakdownData = data.platformBreakdown.length > 0 || data.sourceBreakdown.length > 0;
+
+  return (
+    data.kpis.totalLeads === 0 &&
+    data.kpis.qualifiedLeads === 0 &&
+    data.kpis.wonDeals === 0 &&
+    data.kpis.wonRevenue === 0 &&
+    data.kpis.openPipeline === 0 &&
+    data.kpis.tasksRequiringAttention === 0 &&
+    !hasPipelineData &&
+    !hasBreakdownData &&
+    data.recentLeads.length === 0 &&
+    data.attentionTasks.length === 0
+  );
+}
+
+function OverviewLoadingState() {
+  return (
+    <div className="space-y-4" data-testid="overview-loading-state">
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="rounded-2xl border bg-card p-5 space-y-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Card key={index} className="rounded-2xl">
+            <CardHeader className="pb-2">
+              <Skeleton className="h-5 w-40" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function OverviewPage() {
-  const topCampaigns = [...campaigns].sort((a, b) => b.roas - a.roas).slice(0, 5);
-  const underperforming = [...campaigns].filter(c => c.status === 'active').sort((a, b) => a.roas - b.roas).slice(0, 3);
-  const recentLeads = leads.slice(0, 5);
-  const urgentTasks = tasks.filter(t => !t.completed).sort((a, b) => {
-    const p = { urgent: 0, high: 1, medium: 2, low: 3 };
-    return p[a.priority] - p[b.priority];
-  }).slice(0, 5);
-  const recentActivities = activities.slice(0, 6);
+  const overviewQuery = useOverviewQuery();
+  const overview = overviewQuery.data;
+  const maxPipelineValue = Math.max(...(overview?.pipelineByStage.map((item) => item.amount) ?? [0]));
 
   return (
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto animate-fade-in">
-        {/* KPI Row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-          <KpiCard title="Spend" value={formatCurrency(kpiSummary.spend.value)} change={kpiSummary.spend.change} trend="up" icon={<DollarSign className="h-4 w-4" />} />
-          <KpiCard title="Impressions" value={formatNumber(kpiSummary.impressions.value)} change={kpiSummary.impressions.change} trend="up" icon={<Eye className="h-4 w-4" />} />
-          <KpiCard title="Clicks" value={formatNumber(kpiSummary.clicks.value)} change={kpiSummary.clicks.change} trend="up" icon={<MousePointer className="h-4 w-4" />} />
-          <KpiCard title="Leads" value={formatNumber(kpiSummary.leads.value)} change={kpiSummary.leads.change} trend="up" icon={<UserPlus className="h-4 w-4" />} />
-          <KpiCard title="Qualified" value={formatNumber(kpiSummary.qualifiedLeads.value)} change={kpiSummary.qualifiedLeads.change} trend="up" icon={<UserCheck className="h-4 w-4" />} />
-          <KpiCard title="Deals" value={kpiSummary.dealsCreated.value.toString()} change={kpiSummary.dealsCreated.change} trend="up" icon={<Handshake className="h-4 w-4" />} />
-          <KpiCard title="Won Revenue" value={formatCurrency(kpiSummary.wonRevenue.value)} change={kpiSummary.wonRevenue.change} trend="up" icon={<TrendingUp className="h-4 w-4" />} gradient />
-          <KpiCard title="ROAS" value={`${kpiSummary.roas.value}x`} change={kpiSummary.roas.change} trend="up" icon={<Target className="h-4 w-4" />} gradient />
-        </div>
+        <SectionHeader
+          title="Overview"
+          description="A live snapshot of leads, deals, and attention tasks across the CRM."
+        />
 
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Spend vs Revenue</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={spendVsRevenueData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                    <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `$${v/1000}K`} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                    <Line type="monotone" dataKey="spend" stroke="hsl(var(--chart-5))" strokeWidth={2} dot={false} name="Spend" />
-                    <Line type="monotone" dataKey="revenue" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} name="Revenue" />
-                    <Legend />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Leads → Qualified → Won</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={leadsQualifiedWonData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                    <YAxis className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
-                    <Bar dataKey="leads" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Leads" />
-                    <Bar dataKey="qualified" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} name="Qualified" />
-                    <Bar dataKey="won" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} name="Won" />
-                    <Legend />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Platform Spend Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 flex items-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={platformSpendData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                      {platformSpendData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => formatCurrency(value)} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Pipeline by Stage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={pipelineStageData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => `$${v/1000}K`} className="text-xs" />
-                    <YAxis type="category" dataKey="stage" tick={{ fill: 'hsl(var(--muted-foreground))' }} className="text-xs" width={80} />
-                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} formatter={(value: number) => formatCurrency(value)} />
-                    <Bar dataKey="value" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} name="Value" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Source to Revenue Funnel */}
-        <Card className="rounded-2xl">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Source to Revenue Funnel</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center justify-center gap-2 py-4">
-              {[
-                { label: 'Impressions', value: funnelData.impressions },
-                { label: 'Clicks', value: funnelData.clicks },
-                { label: 'Leads', value: funnelData.leads },
-                { label: 'Qualified', value: funnelData.qualified },
-                { label: 'Deals', value: funnelData.deals },
-                { label: 'Won', value: funnelData.won },
-              ].map((step, i, arr) => (
-                <div key={step.label} className="flex items-center gap-2">
-                  <div className="text-center px-4 py-3 rounded-xl bg-gradient-to-b from-primary/5 to-primary/10 border border-primary/10 min-w-[100px]">
-                    <p className="text-lg font-bold">{formatNumber(step.value)}</p>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{step.label}</p>
-                  </div>
-                  {i < arr.length - 1 && (
-                    <div className="flex flex-col items-center">
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-[9px] text-muted-foreground font-medium">
-                        {((arr[i + 1].value / step.value) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
+        {overviewQuery.isPending ? (
+          <OverviewLoadingState />
+        ) : overviewQuery.isError ? (
+          <StateCard
+            icon={<AlertTriangle className="h-8 w-8 text-destructive" />}
+            title="Unable to load overview"
+            description="We couldn't fetch the live overview summary from Supabase. Try refreshing the page again."
+            className="py-24"
+          />
+        ) : !overview || isOverviewEmpty(overview) ? (
+          <StateCard
+            icon={<Inbox className="h-8 w-8 text-muted-foreground" />}
+            title="No overview data yet"
+            description="Seed the development database or start creating leads and deals to populate the dashboard."
+            className="py-24"
+          />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+              <KpiCard
+                title="Total Leads"
+                value={formatCompactCount(overview.kpis.totalLeads)}
+                icon={<UserPlus className="h-4 w-4" />}
+              />
+              <KpiCard
+                title="Qualified Leads"
+                value={formatCompactCount(overview.kpis.qualifiedLeads)}
+                icon={<UserCheck className="h-4 w-4" />}
+              />
+              <KpiCard
+                title="Won Deals"
+                value={formatCompactCount(overview.kpis.wonDeals)}
+                icon={<Handshake className="h-4 w-4" />}
+              />
+              <KpiCard
+                title="Won Revenue"
+                value={formatCompactCurrency(overview.kpis.wonRevenue)}
+                icon={<TrendingUp className="h-4 w-4" />}
+                gradient
+              />
+              <KpiCard
+                title="Open Pipeline"
+                value={formatCompactCurrency(overview.kpis.openPipeline)}
+                icon={<Target className="h-4 w-4" />}
+                gradient
+              />
+              <KpiCard
+                title="Tasks Requiring Attention"
+                value={formatCompactCount(overview.kpis.tasksRequiringAttention)}
+                icon={<AlertTriangle className="h-4 w-4" />}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Bottom Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {/* Top Campaigns */}
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Top Campaigns by ROAS</CardTitle>
-                <Button variant="ghost" size="sm" asChild><Link to="/campaigns">View All</Link></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {topCampaigns.map((c) => (
-                <Link to={`/campaigns/${c.id}`} key={c.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{c.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <PlatformBadge platform={c.platform} />
-                      <span className="text-xs text-muted-foreground">{formatCurrency(c.spend)} spent</span>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Pipeline by Stage</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {overview.pipelineByStage.some((item) => item.count > 0) ? (
+                    <div className="space-y-3">
+                      {overview.pipelineByStage.map((item) => (
+                        <div
+                          key={item.stage}
+                          className="space-y-1.5"
+                          data-testid={`overview-pipeline-stage-${item.stage}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={item.stage} />
+                              <span className="text-xs text-muted-foreground">{item.count} deals</span>
+                            </div>
+                            <span className="text-sm font-semibold">{formatCompactCurrency(item.amount)}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-muted">
+                            <div
+                              className="h-2 rounded-full bg-primary/70"
+                              style={{ width: getPipelineWidth(item.amount, maxPipelineValue) }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-success">{c.roas.toFixed(1)}x</p>
-                    <p className="text-xs text-muted-foreground">{formatCurrency(c.revenue)}</p>
-                  </div>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <EmptyState
+                      title="No deals in the pipeline"
+                      description="Won and open pipeline KPIs will start populating as opportunities are created."
+                      className="py-12"
+                    />
+                  )}
+                </CardContent>
+              </Card>
 
-          {/* Quick Insights */}
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-warning" />
-                Quick Insights
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-success/5 border border-success/10">
-                <Zap className="h-4 w-4 text-success mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold">Best ROAS Campaign</p>
-                  <p className="text-xs text-muted-foreground">Retargeting - Website Visitors at 14.5x ROAS</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-destructive/5 border border-destructive/10">
-                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold">Highest CPL Campaign</p>
-                  <p className="text-xs text-muted-foreground">LinkedIn Decision Makers at $245/lead</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-warning/5 border border-warning/10">
-                <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold">3 leads with no follow-up</p>
-                  <p className="text-xs text-muted-foreground">Maria Garcia, Ryan O'Brien, Kevin Park</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-info/5 border border-info/10">
-                <TrendingUp className="h-4 w-4 text-info mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold">Revenue concentration</p>
-                  <p className="text-xs text-muted-foreground">67% of won revenue from Google & LinkedIn</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 p-2.5 rounded-lg bg-warning/5 border border-warning/10">
-                <Handshake className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold">Stage bottleneck</p>
-                  <p className="text-xs text-muted-foreground">$645K stuck in Negotiation stage (2 deals)</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Lead Attribution Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {overview.platformBreakdown.length > 0 || overview.sourceBreakdown.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          By Platform
+                        </p>
+                        {overview.platformBreakdown.map((item) => (
+                          <div key={item.platform} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <PlatformBadge platform={item.platform} />
+                              <span className="text-sm font-medium">
+                                {item.count} ({Math.round(item.share * 100)}%)
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full bg-muted">
+                              <div
+                                className="h-2 rounded-full bg-primary/70"
+                                style={{ width: `${item.share * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-          {/* Tasks */}
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Tasks Requiring Attention</CardTitle>
-                <Button variant="ghost" size="sm" asChild><Link to="/tasks">View All</Link></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {urgentTasks.map((t) => (
-                <div key={t.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{t.title}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <PriorityBadge priority={t.priority} />
-                      <span className="text-xs text-muted-foreground">{t.owner}</span>
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          By Source
+                        </p>
+                        {overview.sourceBreakdown.map((item) => (
+                          <div key={item.source} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{item.label}</span>
+                              <span className="text-sm text-muted-foreground">
+                                {item.count} ({Math.round(item.share * 100)}%)
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full bg-muted">
+                              <div
+                                className="h-2 rounded-full bg-info/70"
+                                style={{ width: `${item.share * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <span className={`text-xs font-medium whitespace-nowrap ${new Date(t.dueDate) < new Date() ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    {t.dueDate}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+                  ) : (
+                    <EmptyState
+                      title="No attribution data yet"
+                      description="Platform and source breakdowns will appear once leads start flowing into the CRM."
+                      className="py-12"
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
-        {/* Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Recent Leads</CardTitle>
-                <Button variant="ghost" size="sm" asChild><Link to="/leads">View All</Link></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {recentLeads.map((l) => (
-                <Link to={`/leads/${l.id}`} key={l.id} className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-                      {l.name.split(' ').map(n => n[0]).join('')}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold">Tasks Requiring Attention</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {overview.attentionTasks.length > 0 ? (
+                    <div className="space-y-3">
+                      {overview.attentionTasks.map((task) => (
+                        <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{task.title}</p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <PriorityBadge priority={task.priority} />
+                              <span className="text-xs text-muted-foreground">{task.relatedLabel}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-semibold text-destructive">Overdue</p>
+                            <p className="text-xs text-muted-foreground">{formatDate(task.dueAt)}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{l.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{l.company}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <PlatformBadge platform={l.source} />
-                    <StatusBadge status={l.status} />
-                  </div>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
+                  ) : (
+                    <EmptyState
+                      title="No overdue tasks"
+                      description="This section will surface open tasks whose due dates have already passed."
+                      className="py-12"
+                    />
+                  )}
+                </CardContent>
+              </Card>
 
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
-                <Button variant="ghost" size="sm" asChild><Link to="/activities">View All</Link></Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ActivityTimeline activities={recentActivities} />
-            </CardContent>
-          </Card>
-        </div>
+              <Card className="rounded-2xl">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Recent Leads</CardTitle>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link to="/leads">View All</Link>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {overview.recentLeads.length > 0 ? (
+                    <div className="space-y-2">
+                      {overview.recentLeads.map((lead) => (
+                        <Link
+                          to={`/leads/${lead.id}`}
+                          key={lead.id}
+                          className="flex items-center justify-between gap-3 rounded-lg p-2 transition-colors hover:bg-accent"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                              {getInitials(lead.name)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{lead.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {lead.companyName ?? "Unknown company"}
+                                {lead.campaignName ? ` • ${lead.campaignName}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <PlatformBadge platform={lead.platform} />
+                            <StatusBadge status={lead.status} />
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="No recent leads"
+                      description="New lead captures will appear here as soon as they hit the CRM."
+                      className="py-12"
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );
